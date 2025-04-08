@@ -1,1 +1,1 @@
-All scripts related to the FAO deforestation project and related papers
+All codes for my first PhD paper on global deforestation driven by finance
