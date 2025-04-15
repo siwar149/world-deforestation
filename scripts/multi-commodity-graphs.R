@@ -13,6 +13,7 @@ library(sf)
 library(units)
 library(ggpubr)
 library(rnaturalearthdata)
+library(ggbreak)
 
 # Install ggsankey from GitHub
 #devtools::install_github("davidsjoberg/ggsankey")
@@ -43,7 +44,8 @@ results_all <- results_all[, `:=` (continent_origin = fifelse(continent_origin =
                                    continent_target = fifelse(continent_target == 'EU', 'EUR',continent_target))]
 
 # general graph
-results_all %>% 
+results_all %>%
+  mutate(trade = if_else(continent_origin == continent_target, "DOM", "TRADE")) %>%
   group_by(consumption_category,trade) %>% summarise(d_f_a = sum(d_f_a), .groups = "drop") %>%
   mutate(prop = d_f_a / sum(d_f_a) * 100) %>%
   arrange(desc(interaction(trade, consumption_category))) %>%
@@ -122,6 +124,8 @@ ggsave(plot = last_plot(), bg = "#ffffff",
          width = 240, height = 140, units = "mm", scale = 1)
 
 
+
+
 # top crops
 a <- results_all %>% group_by(crop) %>% summarise(d_f_a = sum(d_f_a), .groups = "drop") %>% arrange(desc(d_f_a)) %>% print(n = 15)
 
@@ -135,6 +139,7 @@ results_all %>% mutate(trade = if_else(continent_origin == continent_target, "DO
   mutate(crop = fct_relevel(crop, "Other", after = 0)) %>%  # Moves "Other" to the bottom
   ggplot(aes(x = crop, y = d_f_a, fill = interaction(consumption_category,trade))) +
   geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  #scale_y_break(c(600, 2000)) +
   scale_fill_viridis_d(option = "viridis", direction = -1, begin = 0, end = 1) +  # Apply viridis color scale
   coord_flip() +
   scale_y_continuous(labels = label_number(scale = 1e-3)) + 
@@ -153,7 +158,7 @@ results_all %>% mutate(trade = if_else(continent_origin == continent_target, "DO
         plot.margin = margin(10, 20, 10, 10))
 
 ggsave(plot = last_plot(), bg = "#ffffff",
-       filename = "./output/fig-21-global-def-fp-crops.png",
+       filename = "./output/FIG1_2-global-def-fp-crops.png",
        width = 240, height = 140, units = "mm", scale = 1)
 
 
