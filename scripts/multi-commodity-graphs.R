@@ -14,6 +14,8 @@ library(units)
 library(ggpubr)
 library(rnaturalearthdata)
 library(ggbreak)
+library(scatterpie)
+library(ggnewscale)
 
 # Install ggsankey from GitHub
 #devtools::install_github("davidsjoberg/ggsankey")
@@ -95,14 +97,6 @@ world <- ne_countries(scale = "medium", returnclass = "sf")
 world <- world %>% select(admin, adm0_a3,geometry)
 world <- world %>% left_join(a[,c(1,5,6)], by = c("adm0_a3"="country"))
 
-
-ggplot(data = world) +
-  geom_sf(aes(fill = type, alpha = NFP)) +
-  coord_sf(crs = "+proj=robin") +
-  scale_alpha(range = c(0.4, 1)) +  # Optional tweak for visibility
-  theme_minimal()
-
-
 # Scale NFP within each type
 world <- world %>%
   group_by(type) %>%
@@ -117,7 +111,40 @@ ggplot(world) +
   theme_minimal() +
   scale_fill_viridis_d(option = "H", begin = 0.1)
   
-  scale_fill_brewer(palette = "Set2", name = "Type", direction = -1)
+
+# World map with pie charts
+pies <- results_all %>%
+  filter(continent_target != "ROW") %>%
+  mutate(trade = if_else(continent_origin == continent_target, "DOM", "TRADE")) %>%
+  group_by(continent_target,consumption_category, trade) %>% 
+  summarise(d_f_a = sum(d_f_a), .groups = "drop") %>%
+  pivot_wider(names_from = c(consumption_category, trade), values_from = d_f_a) %>%
+  mutate(lon = c(-20, 160, -20, -100, -160, 120),
+         lat = c(-20, 50, 40, 0, 50, -20))
+
+
+ggplot() +
+  geom_sf(data = world,aes(fill = type, alpha = NFP_scaled)) +
+  scale_alpha(range = c(0.4, 1), guide = "none") +  # hide alpha legend
+  #coord_sf(crs = "+proj=robin") +
+  scale_fill_viridis_d(option = "H", begin = 0.1) +
+  new_scale_fill() +
+  geom_scatterpie(
+    aes(x = lon, y = lat, group = continent_target, r = 10),
+    data = pies,
+    cols = c("food_DOM", "food_TRADE", "other_DOM", "other_TRADE"),
+    color = NA,
+    alpha = 1
+  ) +
+  geom_text(
+    data = pies,
+    aes(x = lon, y = lat, label = continent_target),
+    nudge_y = 12, size = 3
+  ) +
+  theme_void()
+
+
+
 
 ggsave(plot = last_plot(), bg = "#ffffff",
          filename = "./output/FIG1-net-footprints-trade.png",
@@ -160,6 +187,7 @@ results_all %>% mutate(trade = if_else(continent_origin == continent_target, "DO
 ggsave(plot = last_plot(), bg = "#ffffff",
        filename = "./output/FIG1_2-global-def-fp-crops.png",
        width = 240, height = 140, units = "mm", scale = 1)
+
 
 
 
@@ -330,57 +358,3 @@ ggplot(long, aes(x = x,
         axis.text.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank())
-
-
-
-
-
-
-# world maps
-world_map <- map_data("world") %>% 
-  filter(! long > 180)
-
-
-gp <- results %>%
-  group_by(item_final, country_target, year) %>%
-  summarise(cbf_un = sum(cbf_un),
-            cbf_a = sum(cbf_a), .groups = "drop") %>%
-  filter(item_final == commodity) %>%
-  left_join(regions[, c(1,3)], by = c("country_target"="iso3c")) %>%
-  left_join(pop_d, by = c("country_target"="iso3c", "year"), relationship = "many-to-many") %>%
-  left_join(fc, by = c("area"="fabio_c"), relationship = "many-to-many") %>%
-  mutate(cbf_un_c = cbf_un / SP.POP.TOTL,
-         cbf_a_c = cbf_a / SP.POP.TOTL) %>%
-  filter(year == 2021) %>%
-  select(item_final, country_target, WM, cbf_un_c, cbf_a_c)
-
-map <- world_map %>%
-  left_join(gp,by=c("region"="WM"), relationship = "many-to-many")
-
-p <- map %>%
-  ggplot(aes(map_id = region, fill = cbf_un_c)) +
-  geom_map(map = world_map) +
-  geom_polygon(data = world_map, aes(x = long, y = lat, group = group),
-               color = "black", fill = NA, size = 0.1) +
-  labs(fill = "m2 / person", title = "") +  # Add title using labs()
-  # scale_fill_viridis_c(end = 0.95, direction = -1,
-  scale_fill_viridis_c(option = "magma", begin = 0.2, direction = -1,
-                       labels = scales::label_number(scale = 1e+4)) +  # Use reversed color gradient
-  # coord_map(projection = "moll") +
-  coord_sf(crs = "+proj=robin") +
-  theme_bw() +
-  theme(axis.title.x = element_blank(),  # Remove x-axis label
-        axis.title.y = element_blank(),  # Remove y-axis label
-        axis.text.x = element_blank(),   # Remove x-axis values
-        axis.text.y = element_blank(),   # Remove y-axis values
-        axis.ticks = element_blank(),    # Remove tick marks from axes
-        panel.grid = element_blank(),    # Remove coordinate lines
-        panel.border = element_rect(color = "black", size = 0),  # Thicker plot frame
-        # panel.grid.major = element_line(color = "gray80", size = 0.5),  # Add graticule lines
-        # panel.grid.minor = element_blank(),  # Remove minor grid lines
-        plot.title = element_text(hjust = 0.5, face = "bold"))  # Center and bold title
-
-
-ggplot2::ggsave(plot = p, bg = "#ffffff",
-                filename = paste0("./output/fig-", commodity, ".png"),
-                width = 240, height = 140, units = "mm", scale = 1)
