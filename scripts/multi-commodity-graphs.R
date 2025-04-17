@@ -30,7 +30,7 @@ rm(list = setdiff(ls(), "results"))
 gc()
 
 # generating consistency for matching with world map data
-fc <- read_excel("./input/fabio-countries.xlsx")
+#fc <- read_excel("./input/fabio-countries.xlsx")
 input_path <- "/mnt/nfs_fineprint/tmp/fabio/v1.2/current/"
 regions <- fread(file=paste0(input_path,"regions.csv"))
 
@@ -45,30 +45,12 @@ results_all <- results_all[, `:=` (continent_origin = fifelse(continent_origin =
                                    continent_imd = fifelse(continent_imd == 'EU', 'EUR',continent_imd),
                                    continent_target = fifelse(continent_target == 'EU', 'EUR',continent_target))]
 
-# general graph
-results_all %>%
-  mutate(trade = if_else(continent_origin == continent_target, "DOM", "TRADE")) %>%
-  group_by(consumption_category,trade) %>% summarise(d_f_a = sum(d_f_a), .groups = "drop") %>%
-  mutate(prop = d_f_a / sum(d_f_a) * 100) %>%
-  arrange(desc(interaction(trade, consumption_category))) %>%
-  mutate(ypos = cumsum(prop) - 0.5 * prop) %>%
-  ggplot(aes(x = "", y = d_f_a, fill = interaction(consumption_category,trade))) +
-  geom_bar(stat = "identity", width = 1) +  # Bar chart
-  coord_polar(theta = "y") +
-  geom_text(aes(y = ypos, label = paste0(round(prop), "%")), 
-            color = "white", size = 5) +# Convert to pie
-  theme_void() +
-  theme(legend.title = element_blank())
-
 # I like this graph (INTEGRATE WITH WORLD MAP!)
 results_all %>%
   filter(continent_target != "ROW") %>%
   mutate(trade = if_else(continent_origin == continent_target, "DOM", "TRADE")) %>%
   group_by(continent_target,consumption_category, trade) %>% 
   summarise(d_f_a = sum(d_f_a), .groups = "drop") %>%
-  mutate(prop = d_f_a / sum(d_f_a) * 100) %>%
-  arrange(interaction(trade, consumption_category)) %>%
-  mutate(ypos = cumsum(d_f_a) - 0.5 * d_f_a) %>%
   ggplot(aes(x = "", y = d_f_a, fill = interaction(consumption_category, trade))) +
   geom_bar(stat = "identity", width = 1) +
   coord_polar(theta = "y") +
@@ -88,9 +70,9 @@ a <- left_join(b, c[,c(1,3)], by = c("country_origin"="country_target")) %>% ren
 a <- rbind(a,c1, fill = T)
 a[is.na(a)] <- 0
 a[, `:=` (NFP = DOM + IMP,
-          type = fcase(IMP > DOM, "NI",
-                       EXP > DOM, "NE",
-                       DOM > IMP, "DC",
+          type = fcase(IMP > DOM, "Importer",
+                       EXP > DOM, "Exporter",
+                       DOM > IMP, "Domestic",
                        default = NA_character_))]
 
 world <- ne_countries(scale = "medium", returnclass = "sf")
@@ -104,12 +86,12 @@ world <- world %>%
   ungroup()
 
 # Plot with fill by type and alpha by NFP within type
-ggplot(world) +
-  geom_sf(aes(fill = type, alpha = NFP_scaled)) +
-  scale_alpha(range = c(0.4, 1), guide = "none") +  # hide alpha legend
-  coord_sf(crs = "+proj=robin") +
-  theme_minimal() +
-  scale_fill_viridis_d(option = "H", begin = 0.1)
+# ggplot(world) +
+#   geom_sf(aes(fill = type, alpha = NFP_scaled)) +
+#   scale_alpha(range = c(0.4, 1), guide = "none") +  # hide alpha legend
+#   coord_sf(crs = "+proj=robin") +
+#   theme_minimal() +
+#   scale_fill_viridis_d(option = "H", begin = 0.1)
   
 
 # World map with pie charts
@@ -119,29 +101,39 @@ pies <- results_all %>%
   group_by(continent_target,consumption_category, trade) %>% 
   summarise(d_f_a = sum(d_f_a), .groups = "drop") %>%
   pivot_wider(names_from = c(consumption_category, trade), values_from = d_f_a) %>%
-  mutate(lon = c(-20, 160, -20, -100, -160, 120),
-         lat = c(-20, 50, 40, 0, 50, -20))
+  mutate(lon = c(-10, 80, -30, -110, -150, 165),
+         lat = c(-20, -20, 40, -10, 35, 10))
 
+colnames(pies)[2:5] <- c("Food_DOM", "Food_TRADE", "Other_DOM", "Other_TRADE")
 
 ggplot() +
   geom_sf(data = world,aes(fill = type, alpha = NFP_scaled)) +
   scale_alpha(range = c(0.4, 1), guide = "none") +  # hide alpha legend
   #coord_sf(crs = "+proj=robin") +
-  scale_fill_viridis_d(option = "H", begin = 0.1) +
+  coord_sf(xlim = c(-180, 200), ylim = c(-60, 80)) +
+  scale_fill_viridis_d(name = "Footprint", option = "H", begin = 0.1) +
   new_scale_fill() +
   geom_scatterpie(
-    aes(x = lon, y = lat, group = continent_target, r = 10),
+    aes(x = lon, y = lat, group = continent_target, r = 16),
     data = pies,
-    cols = c("food_DOM", "food_TRADE", "other_DOM", "other_TRADE"),
-    color = NA,
-    alpha = 1
+    cols = colnames(pies)[2:5],
+    color = NA
   ) +
+  scale_fill_viridis_d(name = "End use_Source", option = "H", direction = 1, begin = 0.4) +
   geom_text(
     data = pies,
     aes(x = lon, y = lat, label = continent_target),
-    nudge_y = 12, size = 3
+    nudge_y = 19, size = 3
   ) +
-  theme_void()
+  theme_void() +
+  theme(legend.position = "bottom",
+        legend.title.position = "top",
+        legend.background = element_rect(color = "black", size = 1),
+        legend.spacing = unit(1, "cm"),
+        legend.margin = margin(5, 5, 5, 5),
+        plot.margin = margin(-3,-2,-3,-1,"cm")
+        ) +
+  guides(fill = guide_legend(nrow = 2))
 
 
 
