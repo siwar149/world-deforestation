@@ -136,16 +136,13 @@ ggplot() +
   guides(fill = guide_legend(nrow = 2))
 
 
-
-
 ggsave(plot = last_plot(), bg = "#ffffff",
          filename = "./output/FIG1-net-footprints-trade.png",
          width = 240, height = 140, units = "mm", scale = 1)
 
 
 
-
-# top crops
+# TOP CROPS
 a <- results_all %>% group_by(crop) %>% summarise(d_f_a = sum(d_f_a), .groups = "drop") %>% arrange(desc(d_f_a)) %>% print(n = 15)
 
 a_l <- a$crop[1:9]
@@ -179,6 +176,9 @@ results_all %>% mutate(trade = if_else(continent_origin == continent_target, "DO
 ggsave(plot = last_plot(), bg = "#ffffff",
        filename = "./output/FIG1_2-global-def-fp-crops.png",
        width = 240, height = 140, units = "mm", scale = 1)
+
+
+
 
 
 
@@ -218,7 +218,6 @@ results_all %>% group_by(group, consumption_category) %>% summarise(d_f_a = sum(
 ggsave(plot = last_plot(), bg = "#ffffff",
        filename = "./output/fig-22-global-def-fp-crops.png",
        width = 240, height = 140, units = "mm", scale = 1)
-
 
 
 
